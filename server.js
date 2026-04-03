@@ -265,12 +265,51 @@ class SoulseekSession {
     this.pendingBrowseFolders = new Map();
     this.peers = {};
     this.autoJoinRooms = [];
+    this.reconnectTimer = null;
+    this.reconnectAttempts = 0;
+    this.reconnecting = false;
+    this.lastDisconnectAt = null;
+    this.lastReconnectError = null;
   }
 
   async ensureConnected() {
     if (this.connected) return;
     if (!this.loginPromise) this.loginPromise = this.connect();
     await this.loginPromise;
+  }
+
+  clearReconnectTimer() {
+    if (!this.reconnectTimer) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+  }
+
+  scheduleReconnect(reason = 'unknown') {
+    if (this.connected || this.reconnectTimer || this.reconnecting) return;
+    const delayMs = Math.min(30000, 1000 * (2 ** Math.min(this.reconnectAttempts, 5)));
+    console.warn(`Soulseek disconnected (${reason}); scheduling reconnect in ${delayMs}ms`);
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      try {
+        this.reconnecting = true;
+        await this.reconnect();
+        this.reconnectAttempts = 0;
+        this.lastReconnectError = null;
+        console.log('Soulseek reconnect succeeded');
+      } catch (error) {
+        this.reconnectAttempts += 1;
+        this.lastReconnectError = error.message;
+        console.error(`Soulseek reconnect failed (attempt ${this.reconnectAttempts}):`, error.message);
+        if (this.reconnectAttempts >= 5) {
+          console.error('Soulseek reconnect failed too many times; exiting for container restart');
+          process.exit(1);
+        }
+        this.reconnecting = false;
+        this.scheduleReconnect(`retry-after-failure-${this.reconnectAttempts}`);
+        return;
+      }
+      this.reconnecting = false;
+    }, delayMs);
   }
 
   connect() {
@@ -291,6 +330,8 @@ class SoulseekSession {
       socket.on('close', () => {
         this.connected = false;
         this.loginPromise = null;
+        this.lastDisconnectAt = nowIso();
+        if (!this.reconnecting) this.scheduleReconnect('socket-close');
       });
       socket.on('data', (data) => this.serverMessages.write(data));
       this.serverMessages.on('message', (msg) => {
@@ -331,6 +372,9 @@ class SoulseekSession {
           return;
         }
         this.connected = true;
+        this.reconnectAttempts = 0;
+        this.lastReconnectError = null;
+        this.clearReconnectTimer();
         this.setupIncomingListener();
         this.sendSharedFoldersFiles();
         this.sendHaveNoParents();
@@ -1042,6 +1086,8 @@ class SoulseekSession {
   }
 
   async reconnect() {
+    this.reconnecting = true;
+    this.clearReconnectTimer();
     try {
       if (this.listen) this.listen.destroy();
     } catch {}
@@ -1056,9 +1102,13 @@ class SoulseekSession {
     this.loginPromise = null;
     this.serverSocket = null;
     this.listen = null;
-    await this.ensureConnected();
-    await this.autoJoinConfiguredRooms();
-    return this.health();
+    try {
+      await this.ensureConnected();
+      await this.autoJoinConfiguredRooms();
+      return this.health();
+    } finally {
+      this.reconnecting = false;
+    }
   }
 
   health() {
@@ -1071,7 +1121,11 @@ class SoulseekSession {
       downloads: this.downloads.size,
       autoJoinRooms: this.autoJoinRooms,
       hostname: os.hostname(),
-      version: APP_VERSION
+      version: APP_VERSION,
+      reconnecting: this.reconnecting,
+      reconnectAttempts: this.reconnectAttempts,
+      lastDisconnectAt: this.lastDisconnectAt,
+      lastReconnectError: this.lastReconnectError
     };
   }
 }
@@ -1322,6 +1376,12 @@ async function startHttp() {
   await session.loadAutoJoinRooms();
   await session.ensureConnected();
   await session.autoJoinConfiguredRooms();
+
+  setInterval(() => {
+    if (!session.connected && !session.loginPromise && !session.reconnecting) {
+      session.scheduleReconnect('watchdog');
+    }
+  }, 15000).unref();
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
