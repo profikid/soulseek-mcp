@@ -594,6 +594,11 @@ class SoulseekSession {
       }
       default: {
         const conn = net.createConnection({ host: peer.host, port: peer.port });
+        if (peer.type === 'P') {
+          conn.on('connect', () => {
+            conn.write(MessageFactory.to.peer.peerInit(SLSK_USER, 'P', makePeerTokenHex()).getBuff());
+          });
+        }
         this.peers[peer.user] = new DefaultPeer(conn, peer);
         this.attachPeerLifecycle(peer.user, this.peers[peer.user]);
       }
