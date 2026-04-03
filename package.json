@@ -1,0 +1,19 @@
+{
+  "name": "soulseek-mcp",
+  "version": "1.0.0",
+  "description": "Search-only Soulseek MCP server",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test:dry": "mcporter call --stdio \"node /data/.openclaw/workspace/soulseek-mcp/server.js\" search_files query=example timeoutMs:2000 limit:3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "slsk-client": "^1.1.0",
+    "zod": "^4.3.6"
+  }
+}

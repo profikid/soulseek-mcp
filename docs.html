@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Soulseek MCP Docs</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --line: #334155;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --green: #10b981;
+      --blue: #38bdf8;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #0b1220 0%, #111827 100%);
+    }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    h1, h2, h3 { margin: 0 0 12px; }
+    p { color: var(--muted); }
+    .hero {
+      display: grid;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding: 24px;
+      background: rgba(17,24,39,.86);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      margin-right: 8px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 330px 1fr;
+      gap: 18px;
+    }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: rgba(17,24,39,.92);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .endpoint {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .method {
+      background: rgba(16,185,129,.12);
+      color: #6ee7b7;
+      border: 1px solid rgba(16,185,129,.35);
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-weight: 700;
+      min-width: 54px;
+      text-align: center;
+    }
+    input, textarea, button, select {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #0b1220;
+      color: var(--text);
+      padding: 12px 14px;
+      font: inherit;
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    button {
+      background: linear-gradient(180deg, #0ea5e9, #0284c7);
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    button.secondary {
+      background: #1e293b;
+      border: 1px solid var(--line);
+    }
+    .row { display: grid; gap: 10px; margin-bottom: 12px; }
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .tool-card { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 16px; }
+    .tool-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .tool-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--blue); }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      padding: 14px;
+      border-radius: 12px;
+      background: #020617;
+      border: 1px solid #1e293b;
+      color: #cbd5e1;
+      overflow: auto;
+    }
+    .small { font-size: 12px; color: var(--muted); }
+    .ok { color: #6ee7b7; }
+    .warn { color: #fcd34d; }
+    .err { color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div>
+        <h1>Soulseek MCP Explorer</h1>
+        <p>Swagger-ish docs for the public MCP server. Token is never embedded here — you paste it locally in your browser, then inspect tools and test calls live.</p>
+      </div>
+      <div>
+        <span class="pill">MCP <span id="mcpPath"></span></span>
+        <span class="pill">Health <span id="healthPath"></span></span>
+        <span class="pill">Files <span id="filesPath"></span></span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <h2>Auth</h2>
+          <div class="row">
+            <label class="small">Bearer token</label>
+            <input id="token" type="password" placeholder="Paste token here" />
+          </div>
+          <div class="row-2">
+            <button id="saveToken" class="secondary">Save in browser</button>
+            <button id="clearToken" class="secondary">Clear</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Endpoints</h2>
+          <div class="endpoint"><span class="method">POST</span><code id="mcpUrl"></code></div>
+          <p>Main MCP endpoint. Use with JSON-RPC over Streamable HTTP.</p>
+          <div class="endpoint"><span class="method">GET</span><code id="healthUrl"></code></div>
+          <p>Health and runtime state.</p>
+          <div class="endpoint"><span class="method">GET</span><code id="filesUrl"></code></div>
+          <p>Download saved files with a token query param or Bearer auth.</p>
+        </div>
+
+        <div class="card">
+          <h2>Quick actions</h2>
+          <div class="row"><button id="loadHealth" class="secondary">Fetch health</button></div>
+          <div class="row"><button id="initAndLoad">Initialize + list tools</button></div>
+          <div class="row"><button id="rawToolsList" class="secondary">Raw tools/list</button></div>
+        </div>
+
+        <div class="card">
+          <h2>Client config generator</h2>
+          <div class="row">
+            <label class="small">Client</label>
+            <select id="clientPreset">
+              <option value="generic-json">Generic JSON</option>
+              <option value="claude-desktop">Claude Desktop</option>
+              <option value="cursor">Cursor</option>
+              <option value="windsurf">Windsurf</option>
+              <option value="zed">Zed</option>
+            </select>
+          </div>
+          <div class="row">
+            <label class="small">Server name</label>
+            <input id="serverName" value="soulseek" />
+          </div>
+          <div class="row">
+            <button id="generateConfig" class="secondary">Generate config</button>
+          </div>
+          <div class="row">
+            <pre id="configOutput">Pick a client preset, then generate a copy-paste config snippet.</pre>
+          </div>
+          <div class="row-2">
+            <button id="copyConfig">Copy config</button>
+            <button id="copyEndpoint" class="secondary">Copy MCP URL</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h2>Response</h2>
+          <pre id="output">Ready. Paste a token, then press “Initialize + list tools”.</pre>
+        </div>
+
+        <div class="card">
+          <h2>Example tool calls</h2>
+          <p>Swagger-ish shortcuts: load one of these examples, then inspect or send it.</p>
+          <div id="examples"></div>
+        </div>
+
+        <div class="card">
+          <h2>Raw JSON-RPC playground</h2>
+          <div class="row">
+            <label class="small">Method</label>
+            <input id="rawMethod" value="tools/list" />
+          </div>
+          <div class="row">
+            <label class="small">Params JSON</label>
+            <textarea id="rawParams">{}</textarea>
+          </div>
+          <button id="sendRaw" class="secondary">Send raw request</button>
+        </div>
+
+        <div class="card">
+          <h2>Tools</h2>
+          <div id="toolsContainer"><p>No tools loaded yet.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const mcpPath = '/mcp';
+    const healthPath = '/health';
+    const filesPath = '/files';
+    const base = window.location.origin;
+    const storageKey = 'soulseek-mcp-docs-token';
+    const tokenInput = document.getElementById('token');
+    const output = document.getElementById('output');
+    const toolsContainer = document.getElementById('toolsContainer');
+    const configOutput = document.getElementById('configOutput');
+
+    document.getElementById('mcpPath').textContent = mcpPath;
+    document.getElementById('healthPath').textContent = healthPath;
+    document.getElementById('filesPath').textContent = filesPath + '/:path';
+    document.getElementById('mcpUrl').textContent = base + mcpPath;
+    document.getElementById('healthUrl').textContent = base + healthPath;
+    document.getElementById('filesUrl').textContent = base + filesPath + '/:path?token=...';
+
+    const EXAMPLE_USER = 'SnuuSnuu';
+    const EXAMPLES = [
+      {
+        title: 'Search MP3 files at 320 kbps or higher',
+        method: 'tools/call',
+        params: { name: 'search_files', arguments: { query: 'aphex twin', timeoutMs: 5000, limit: 5, format: 'mp3', minBitrate: 320 } }
+      },
+      {
+        title: 'Search FLAC files',
+        method: 'tools/call',
+        params: { name: 'search_files', arguments: { query: 'toto africa', timeoutMs: 5000, limit: 5, format: 'flac' } }
+      },
+      {
+        title: 'Browse user shares',
+        method: 'tools/call',
+        params: { name: 'browse_user_shares', arguments: { username: EXAMPLE_USER } }
+      },
+      {
+        title: 'Browse one folder',
+        method: 'tools/call',
+        params: { name: 'browse_user_folder', arguments: { username: EXAMPLE_USER, folder: '@@abcde\\Music' } }
+      },
+      {
+        title: 'Queue a download',
+        method: 'tools/call',
+        params: { name: 'queue_download', arguments: { username: EXAMPLE_USER, file: '@@abcde\\Music\\track.mp3', outputSubdir: EXAMPLE_USER } }
+      },
+      {
+        title: 'Join a room',
+        method: 'tools/call',
+        params: { name: 'join_room', arguments: { room: 'electronic' } }
+      },
+      {
+        title: 'Send private message',
+        method: 'tools/call',
+        params: { name: 'send_private_message', arguments: { username: EXAMPLE_USER, message: 'hey from MCP docs' } }
+      },
+      {
+        title: 'Set auto-join rooms',
+        method: 'tools/call',
+        params: { name: 'set_auto_join_rooms', arguments: { rooms: ['electronic', 'ambient'] } }
+      },
+      {
+        title: 'List saved files',
+        method: 'tools/call',
+        params: { name: 'list_saved_files', arguments: {} }
+      },
+      {
+        title: 'Get file URL',
+        method: 'tools/call',
+        params: { name: 'get_download_file_url', arguments: { path: `${EXAMPLE_USER}/track.mp3` } }
+      }
+    ];
+
+    const savedToken = localStorage.getItem(storageKey);
+    if (savedToken) tokenInput.value = savedToken;
+
+    function getHeaders() {
+      const token = tokenInput.value.trim();
+      const headers = {
+        'content-type': 'application/json',
+        'accept': 'application/json, text/event-stream'
+      };
+      if (token) headers.authorization = `Bearer ${token}`;
+      return headers;
+    }
+
+    function log(value) {
+      output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    }
+
+    async function copyText(text, label = 'Copied.') {
+      await navigator.clipboard.writeText(text);
+      log(label);
+    }
+
+    async function parseMcpResponse(res) {
+      const text = await res.text();
+      if (!text) return null;
+      if (text.trim().startsWith('{')) return JSON.parse(text);
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      const dataLines = lines.filter(line => line.startsWith('data:')).map(line => line.slice(5).trim());
+      if (dataLines.length) return JSON.parse(dataLines[dataLines.length - 1]);
+      return { raw: text };
+    }
+
+    async function mcpCall(method, params = {}, id = Date.now()) {
+      const res = await fetch(base + mcpPath, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ jsonrpc: '2.0', id, method, params })
+      });
+      const parsed = await parseMcpResponse(res);
+      if (!res.ok) throw new Error(JSON.stringify(parsed || { status: res.status }, null, 2));
+      return parsed;
+    }
+
+    async function initializeClient() {
+      const init = await mcpCall('initialize', {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'docs-ui', version: '1.0.0' }
+      }, 1);
+      await mcpCall('notifications/initialized', {}, 2).catch(() => null);
+      return init;
+    }
+
+    function prettySchema(schema) {
+      return schema ? JSON.stringify(schema, null, 2) : '{}';
+    }
+
+    function exampleArgsFromSchema(schema) {
+      if (!schema || !schema.properties) return {};
+      const out = {};
+      for (const [key, value] of Object.entries(schema.properties)) {
+        if (value.default !== undefined) out[key] = value.default;
+        else if (value.type === 'string') out[key] = '';
+        else if (value.type === 'integer' || value.type === 'number') out[key] = 0;
+        else if (value.type === 'array') out[key] = [];
+        else if (value.type === 'boolean') out[key] = false;
+        else if (value.type === 'object') out[key] = {};
+        else out[key] = null;
+      }
+      return out;
+    }
+
+    function buildClientConfig() {
+      const preset = document.getElementById('clientPreset').value;
+      const serverName = (document.getElementById('serverName').value || 'soulseek').trim() || 'soulseek';
+      const token = tokenInput.value.trim() || 'PASTE_TOKEN_HERE';
+      const url = base + mcpPath;
+
+      const configs = {
+        'generic-json': JSON.stringify({
+          mcpServers: {
+            [serverName]: {
+              type: 'http',
+              url,
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }
+          }
+        }, null, 2),
+        'claude-desktop': JSON.stringify({
+          mcpServers: {
+            [serverName]: {
+              type: 'http',
+              url,
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }
+          }
+        }, null, 2),
+        'cursor': JSON.stringify({
+          mcpServers: {
+            [serverName]: {
+              url,
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }
+          }
+        }, null, 2),
+        'windsurf': JSON.stringify({
+          mcpServers: {
+            [serverName]: {
+              serverUrl: url,
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }
+          }
+        }, null, 2),
+        'zed': JSON.stringify({
+          context_servers: {
+            [serverName]: {
+              source: 'custom',
+              url,
+              headers: {
+                Authorization: `Bearer ${token}`
+              }
+            }
+          }
+        }, null, 2)
+      };
+
+      return configs[preset] || configs['generic-json'];
+    }
+
+    function renderGeneratedConfig() {
+      configOutput.textContent = buildClientConfig();
+    }
+
+    function renderExamples() {
+      const host = document.getElementById('examples');
+      host.innerHTML = '';
+      for (const example of EXAMPLES) {
+        const card = document.createElement('div');
+        card.className = 'tool-card';
+        card.innerHTML = `
+          <div class="tool-head">
+            <div>
+              <h3>${example.title}</h3>
+              <p><span class="tool-name">${example.method}</span></p>
+            </div>
+          </div>
+          <div class="row"><pre>${JSON.stringify(example.params, null, 2)}</pre></div>
+          <div class="row-2">
+            <button data-action="load" class="secondary">Load into playground</button>
+            <button data-action="copy" class="secondary">Copy example</button>
+          </div>
+          <div class="row"><button data-action="send">Send now</button></div>
+        `;
+        card.querySelector('[data-action="load"]').onclick = () => {
+          document.getElementById('rawMethod').value = example.method;
+          document.getElementById('rawParams').value = JSON.stringify(example.params, null, 2);
+          log({ loaded: example.title, method: example.method, params: example.params });
+        };
+        card.querySelector('[data-action="copy"]').onclick = async () => {
+          await copyText(JSON.stringify(example.params, null, 2), `${example.title} copied.`);
+        };
+        card.querySelector('[data-action="send"]').onclick = async () => {
+          try {
+            const res = await mcpCall(example.method, example.params);
+            log(res);
+          } catch (error) {
+            log(String(error.message || error));
+          }
+        };
+        host.appendChild(card);
+      }
+    }
+
+    function renderTools(tools) {
+      if (!tools || !tools.length) {
+        toolsContainer.innerHTML = '<p>No tools returned.</p>';
+        return;
+      }
+      toolsContainer.innerHTML = '';
+      for (const tool of tools) {
+        const card = document.createElement('div');
+        card.className = 'tool-card';
+        const example = exampleArgsFromSchema(tool.inputSchema);
+        card.innerHTML = `
+          <div class="tool-head">
+            <div>
+              <h3 class="tool-name">${tool.name}</h3>
+              <p>${tool.description || 'No description'}</p>
+            </div>
+            <button class="secondary" data-action="schema">Show schema</button>
+          </div>
+          <div class="row">
+            <label class="small">Arguments JSON</label>
+            <textarea>${JSON.stringify(example, null, 2)}</textarea>
+          </div>
+          <div class="row-2">
+            <button data-action="call">Call tool</button>
+            <button class="secondary" data-action="copy">Copy args</button>
+          </div>
+          <div class="row" style="display:none">
+            <pre>${prettySchema(tool.inputSchema)}</pre>
+          </div>
+        `;
+
+        const textarea = card.querySelector('textarea');
+        const schemaBlock = card.querySelector('div[style]');
+        card.querySelector('[data-action="schema"]').onclick = () => {
+          schemaBlock.style.display = schemaBlock.style.display === 'none' ? 'block' : 'none';
+        };
+        card.querySelector('[data-action="copy"]').onclick = async () => {
+          await copyText(textarea.value, `${tool.name} args copied.`);
+        };
+        card.querySelector('[data-action="call"]').onclick = async () => {
+          try {
+            const args = JSON.parse(textarea.value || '{}');
+            const res = await mcpCall('tools/call', { name: tool.name, arguments: args });
+            log(res);
+          } catch (error) {
+            log(String(error.message || error));
+          }
+        };
+        toolsContainer.appendChild(card);
+      }
+    }
+
+    document.getElementById('saveToken').onclick = () => {
+      localStorage.setItem(storageKey, tokenInput.value.trim());
+      log('Token saved in this browser only.');
+    };
+    document.getElementById('clearToken').onclick = () => {
+      localStorage.removeItem(storageKey);
+      tokenInput.value = '';
+      log('Token cleared.');
+    };
+    document.getElementById('loadHealth').onclick = async () => {
+      try {
+        const res = await fetch(base + healthPath);
+        log(await res.json());
+      } catch (error) {
+        log(String(error));
+      }
+    };
+    document.getElementById('initAndLoad').onclick = async () => {
+      try {
+        const init = await initializeClient();
+        const tools = await mcpCall('tools/list', {});
+        log({ initialize: init, tools });
+        renderTools(tools.result?.tools || tools.tools || []);
+      } catch (error) {
+        log(String(error.message || error));
+      }
+    };
+    document.getElementById('rawToolsList').onclick = async () => {
+      try {
+        const tools = await mcpCall('tools/list', {});
+        log(tools);
+      } catch (error) {
+        log(String(error.message || error));
+      }
+    };
+    document.getElementById('sendRaw').onclick = async () => {
+      try {
+        const method = document.getElementById('rawMethod').value.trim();
+        const params = JSON.parse(document.getElementById('rawParams').value || '{}');
+        const res = await mcpCall(method, params);
+        log(res);
+      } catch (error) {
+        log(String(error.message || error));
+      }
+    };
+
+    document.getElementById('generateConfig').onclick = renderGeneratedConfig;
+    document.getElementById('clientPreset').onchange = renderGeneratedConfig;
+    document.getElementById('serverName').oninput = renderGeneratedConfig;
+    tokenInput.addEventListener('input', renderGeneratedConfig);
+    document.getElementById('copyConfig').onclick = async () => {
+      await copyText(configOutput.textContent, 'Client config copied.');
+    };
+    document.getElementById('copyEndpoint').onclick = async () => {
+      await copyText(base + mcpPath, 'MCP endpoint copied.');
+    };
+
+    renderExamples();
+    renderGeneratedConfig();
+  </script>
+</body>
+</html>
